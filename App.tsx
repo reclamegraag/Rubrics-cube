@@ -129,8 +129,9 @@ function App() {
              enablePan={false} 
              minDistance={15} 
              maxDistance={50}
-             autoRotate={!isShaking && moveQueue.length === 0}
-             autoRotateSpeed={1.0}
+             // Camera spins automatically, faster when shuffling/solving
+             autoRotate={true}
+             autoRotateSpeed={isShaking ? 20.0 : 0.8}
              dampingFactor={0.05}
           />
           

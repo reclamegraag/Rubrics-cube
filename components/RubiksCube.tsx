@@ -107,8 +107,9 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
   // --- Animation Loop ---
   useFrame((state, delta) => {
     if (isAnimating && currentMove.current && rotatingGroup.current) {
-      // Process queue very fast if shaking
-      const speed = isShaking ? 50 : 6; 
+      // Process queue fast but visible if shaking (approx 0.1s per move)
+      // Lower value = Slower animation. 15 is fast but smooth.
+      const speed = isShaking ? 15 : 6; 
       animationProgress.current += delta * speed;
       
       const targetRotation = (Math.PI / 2) * currentMove.current.direction;
