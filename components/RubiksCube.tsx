@@ -81,60 +81,34 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
 
   // --- Helper: Robust Snapping ---
   const snapTransform = (obj: THREE.Object3D) => {
-    // 1. Snap Position to nearest half-integer (0.5, 1.5, etc for even cube size)
-    // Formula: Math.floor(val) + 0.5 ensures we land on X.5 exactly.
-    const snapCoord = (val: number) => {
-      // If CUBE_SIZE is even (10), coords are X.5. 
-      // If it were odd, they would be Integers.
-      // We assume Even (10x10) for this app.
-      const sign = Math.sign(val);
-      const abs = Math.abs(val);
-      // Snap to nearest X.5
-      return sign * (Math.floor(abs) + 0.5);
+    // 1. Snap Position to strictly match grid
+    // The grid is always centered, so positions are like -4.5, -3.5, ... 3.5, 4.5
+    const snap = (val: number) => {
+        // Round to nearest .5
+        return Math.round(val - 0.5) + 0.5;
     };
     
-    obj.position.x = snapCoord(obj.position.x);
-    obj.position.y = snapCoord(obj.position.y);
-    obj.position.z = snapCoord(obj.position.z);
+    obj.position.x = snap(obj.position.x);
+    obj.position.y = snap(obj.position.y);
+    obj.position.z = snap(obj.position.z);
 
-    // 2. Snap Rotation Matrix to strict Orthonormal Axis-Aligned
+    // 2. Snap Rotation to strict 90 degree increments
     obj.updateMatrix();
-    const mat = obj.matrix;
+    const euler = new THREE.Euler().setFromQuaternion(obj.quaternion);
     
-    // Extract basis vectors
-    const right = new THREE.Vector3().setFromMatrixColumn(mat, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(mat, 1);
-    const fwd = new THREE.Vector3().setFromMatrixColumn(mat, 2);
-
-    // Force them to be exactly (1,0,0), (0,-1,0), etc.
-    const snapVector = (v: THREE.Vector3) => {
-      const ax = Math.abs(v.x);
-      const ay = Math.abs(v.y);
-      const az = Math.abs(v.z);
-      const max = Math.max(ax, ay, az);
-      
-      v.x = ax === max ? Math.sign(v.x) : 0;
-      v.y = ay === max ? Math.sign(v.y) : 0;
-      v.z = az === max ? Math.sign(v.z) : 0;
+    const snapAngle = (angle: number) => {
+        return Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
     };
 
-    snapVector(right);
-    snapVector(up);
-    snapVector(fwd);
-
-    // Rebuild rotation from clean vectors
-    const rotMat = new THREE.Matrix4().makeBasis(right, up, fwd);
-    const q = new THREE.Quaternion().setFromRotationMatrix(rotMat);
-    
-    obj.quaternion.copy(q);
+    obj.rotation.set(snapAngle(euler.x), snapAngle(euler.y), snapAngle(euler.z));
     obj.updateMatrix();
   };
 
   // --- Animation Loop ---
   useFrame((state, delta) => {
     if (isAnimating && currentMove.current && rotatingGroup.current) {
-      // Super fast if shaking to process queue
-      const speed = isShaking ? 40 : 6; 
+      // Process queue very fast if shaking
+      const speed = isShaking ? 50 : 6; 
       animationProgress.current += delta * speed;
       
       const targetRotation = (Math.PI / 2) * currentMove.current.direction;
@@ -178,8 +152,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
     const offset = (CUBE_SIZE - 1) / 2;
     const coordinateValue = move.layer - offset; 
     
-    // Generous epsilon because we are about to snap anyway
-    const EPSILON = 0.45;
+    // Increased epsilon to prevent "missed" blocks during fast floating point math
+    const EPSILON = 0.6;
 
     if(rotatingGroup.current) {
       rotatingGroup.current.rotation.set(0,0,0);
@@ -190,7 +164,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
 
     cubiesRef.current.forEach(cubie => {
       let inSlice = false;
-      // Check logical coordinates which are updated after every move
+      // Use the LOGICAL coordinates to select pieces, not physical ones (avoids drift)
       if (move.axis === 'x' && Math.abs(cubie.x - coordinateValue) < EPSILON) inSlice = true;
       if (move.axis === 'y' && Math.abs(cubie.y - coordinateValue) < EPSILON) inSlice = true;
       if (move.axis === 'z' && Math.abs(cubie.z - coordinateValue) < EPSILON) inSlice = true;
@@ -209,7 +183,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
 
     const children = [...rotatingGroup.current.children];
     
-    // 1. Detach and Snap
+    // 1. Detach and Snap immediately
     children.forEach(child => {
       groupRef.current?.attach(child);
       snapTransform(child);
@@ -243,7 +217,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
       
       {cubiesRef.current.map((cubie) => {
         // Determine faces based on INITIAL position for stickers
-        // This ensures the "colors" stick to the pieces correctly
+        // This ensures the "colors" stick to the pieces correctly regardless of current rotation
         const isActive = {
           R: cubie.initialX === offset,
           L: cubie.initialX === -offset,
