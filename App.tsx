@@ -2,25 +2,23 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Stars, Sparkles, ContactShadows } from '@react-three/drei';
 import { Move, CubeTheme } from './types';
-import { DEFAULT_THEME, CUBE_SIZE } from './constants';
-import { generateCubeTheme } from './services/geminiService';
+import { DEFAULT_THEME, CUBE_SIZE, PRESET_THEMES } from './constants';
 import RubiksCube from './components/RubiksCube';
 import { 
   Palette, 
   Shuffle, 
   RotateCcw, 
-  Wand2, 
   Smartphone, 
+  Check
 } from 'lucide-react';
 
 function App() {
   const [theme, setTheme] = useState<CubeTheme>(DEFAULT_THEME);
+  const [activeThemeName, setActiveThemeName] = useState<string>('Classic');
   const [moveQueue, setMoveQueue] = useState<Move[]>([]);
   const [history, setHistory] = useState<Move[]>([]);
   const [isShaking, setIsShaking] = useState(false);
-  const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [showPromptInput, setShowPromptInput] = useState(false);
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [shakeHint, setShakeHint] = useState(false);
 
   useEffect(() => {
@@ -99,18 +97,10 @@ function App() {
     });
   };
 
-  const handleThemeGenerate = async () => {
-    if (!prompt.trim()) return;
-    setIsGenerating(true);
-    try {
-      const newTheme = await generateCubeTheme(prompt);
-      setTheme(newTheme);
-      setShowPromptInput(false);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsGenerating(false);
-    }
+  const applyTheme = (name: string) => {
+    setTheme(PRESET_THEMES[name]);
+    setActiveThemeName(name);
+    setShowThemeSelector(false);
   };
 
   const requestMotionPermission = async () => {
@@ -180,7 +170,7 @@ function App() {
               HYPER<span className="text-indigo-500">CUBE</span>
             </h1>
             <p className="text-indigo-400/80 text-xs tracking-[0.2em] font-bold mt-1 uppercase">
-              10x10 GenAI Edition
+              10x10 Edition
             </p>
           </div>
           
@@ -224,33 +214,40 @@ function App() {
             <div className="w-px bg-white/10 mx-1 my-2"></div>
 
             <button 
-              onClick={() => setShowPromptInput(!showPromptInput)}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showPromptInput ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'}`}
+              onClick={() => setShowThemeSelector(!showThemeSelector)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showThemeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'}`}
             >
               <Palette size={18} />
               <span className="hidden sm:inline">THEME</span>
             </button>
           </div>
 
-          {showPromptInput && (
-            <div className="bg-black/80 backdrop-blur-xl border border-indigo-500/30 p-2 rounded-2xl flex items-center gap-2 shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300">
-              <Wand2 className="text-indigo-400 ml-2" size={20} />
-              <input 
-                type="text" 
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleThemeGenerate()}
-                placeholder="Describe a theme (e.g., 'Neon City')"
-                className="bg-transparent border-none outline-none text-white placeholder-gray-500 w-full px-2 py-1"
-                autoFocus
-              />
-              <button 
-                onClick={handleThemeGenerate}
-                disabled={isGenerating}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl font-bold text-xs transition disabled:opacity-50 whitespace-nowrap uppercase tracking-wider"
-              >
-                {isGenerating ? 'Thinking...' : 'Generate'}
-              </button>
+          {showThemeSelector && (
+            <div className="bg-black/80 backdrop-blur-xl border border-indigo-500/30 p-4 rounded-2xl flex flex-wrap justify-center gap-3 shadow-2xl w-full max-w-2xl animate-in slide-in-from-bottom-4 fade-in duration-300">
+              {Object.keys(PRESET_THEMES).map((themeName) => (
+                <button
+                  key={themeName}
+                  onClick={() => applyTheme(themeName)}
+                  className={`group relative px-4 py-2 rounded-xl border transition-all duration-300 ${activeThemeName === themeName ? 'bg-white/10 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'bg-transparent border-white/10 hover:border-white/40'}`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                     <div className="flex gap-0.5">
+                        {/* Small visual representation of the palette */}
+                        {[PRESET_THEMES[themeName].F, PRESET_THEMES[themeName].R, PRESET_THEMES[themeName].U].map((c, i) => (
+                          <div key={i} className="w-3 h-3 rounded-full" style={{ backgroundColor: c }} />
+                        ))}
+                     </div>
+                     <span className={`text-xs font-bold uppercase tracking-wider ${activeThemeName === themeName ? 'text-white' : 'text-gray-400 group-hover:text-gray-200'}`}>
+                       {themeName}
+                     </span>
+                  </div>
+                  {activeThemeName === themeName && (
+                    <div className="absolute -top-2 -right-2 bg-indigo-500 rounded-full p-0.5 text-white">
+                      <Check size={10} strokeWidth={4} />
+                    </div>
+                  )}
+                </button>
+              ))}
             </div>
           )}
         </div>
