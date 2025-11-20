@@ -20,6 +20,17 @@ import {
 } from 'lucide-react';
 
 // Fix for missing JSX type definitions for React Three Fiber elements
+// Augmenting both global JSX and React module JSX to ensure compatibility
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      ambientLight: any;
+      spotLight: any;
+      pointLight: any;
+    }
+  }
+}
+
 declare global {
   namespace JSX {
     interface IntrinsicElements {

@@ -18,10 +18,11 @@ root.render(
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     try {
-      // Remove relative path prefix to match HTML/Manifest strategy
-      navigator.serviceWorker.register('sw.js').then(
+      // Bump to v6 to force clean slate
+      navigator.serviceWorker.register('sw.js?v=6').then(
         (registration) => {
-          console.log('SW registered: ', registration.scope);
+          console.log('SW registered with scope: ', registration.scope);
+          registration.update();
         },
         (err) => {
           console.warn('SW registration failed: ', err);

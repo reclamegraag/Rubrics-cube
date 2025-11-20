@@ -6,6 +6,16 @@ import { CubeTheme, Move } from '../types';
 import { isSurface } from '../constants';
 
 // Fix for missing JSX type definitions for React Three Fiber elements
+// Augmenting both global JSX and React module JSX to ensure compatibility
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+    }
+  }
+}
+
 declare global {
   namespace JSX {
     interface IntrinsicElements {
