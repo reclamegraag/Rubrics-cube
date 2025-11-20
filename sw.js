@@ -1,4 +1,6 @@
-const CACHE_NAME = 'hypercube-v2';
+const CACHE_NAME = 'hypercube-v3';
+const OFFLINE_URL = './index.html';
+
 const urlsToCache = [
   './',
   './index.html',
@@ -17,6 +19,17 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Navigation Fallback: For SPA, always serve index.html for navigation requests
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      caches.match(OFFLINE_URL).then((response) => {
+        return response || fetch(event.request).catch(() => caches.match(OFFLINE_URL));
+      })
+    );
+    return;
+  }
+
+  // Standard Cache First strategy for assets
   event.respondWith(
     caches.match(event.request)
       .then(response => {
