@@ -1,4 +1,3 @@
-
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { RoundedBox, Html } from '@react-three/drei';
@@ -295,8 +294,9 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
         direction: sign as 1 | -1
     });
 
-    // Optional: Deselect after move? Or keep for multiple moves.
-    // Keeping it allows fast repeated rotations.
+    // Deselect after move to require new selection for next move
+    setSelection(null);
+    if (onInteractionChange) onInteractionChange(false);
   };
 
   // --- Helper: Robust Snapping ---

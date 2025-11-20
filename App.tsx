@@ -352,7 +352,7 @@ function App() {
                 
                 <input
                   type="range"
-                  min="3"
+                  min="2"
                   max="10"
                   step="1"
                   value={cubeSize}
@@ -361,7 +361,7 @@ function App() {
                 />
                 
                 <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold tracking-widest">
-                  <span>Standard (3)</span>
+                  <span>Pocket (2)</span>
                   <span>Max (10)</span>
                 </div>
              </div>

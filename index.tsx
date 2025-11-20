@@ -1,4 +1,3 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -19,8 +18,8 @@ root.render(
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     try {
-      // Bump to v14 to force clean slate
-      navigator.serviceWorker.register('sw.js?v=14').then(
+      // Bump to v15 to force clean slate
+      navigator.serviceWorker.register('sw.js?v=15').then(
         (registration) => {
           console.log('SW registered with scope: ', registration.scope);
           registration.update();
