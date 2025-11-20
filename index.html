@@ -2,13 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <base href="./" />
+    <!-- Base tag verwijderd om verwarring met relatieve paden in PWA modus te voorkomen -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#050505">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="description" content="A stunning 10x10x10 Rubik's Cube powered by Gemini.">
-    <link rel="manifest" href="./manifest.json">
+    <link rel="manifest" href="manifest.json">
     <title>Gemini HyperCube</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -36,6 +36,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <!-- Verwijder ./ prefix voor maximale compatibiliteit -->
+    <script type="module" src="index.tsx"></script>
   </body>
 </html>

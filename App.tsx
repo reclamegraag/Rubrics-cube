@@ -19,6 +19,17 @@ import {
   Lightbulb
 } from 'lucide-react';
 
+// Fix for missing JSX type definitions for React Three Fiber elements
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      ambientLight: any;
+      spotLight: any;
+      pointLight: any;
+    }
+  }
+}
+
 function App() {
   const [theme, setTheme] = useState<CubeTheme>(DEFAULT_THEME);
   const [activeThemeName, setActiveThemeName] = useState<string>('Classic');
