@@ -43,6 +43,9 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
   const rotatingGroup = useRef<THREE.Group>(null);
   const { camera, gl } = useThree();
   
+  // Ref for tracking touch/click movement for robust tap detection
+  const clickStartRef = useRef<{ x: number, y: number } | null>(null);
+
   // --- Material Setup ---
   const materials = useMemo(() => {
     const matSettings = {
@@ -129,18 +132,28 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     };
   }, [size]);
 
-  // Helper to validate if a face is actually on the outside of the main cube
-  const isOuterFace = (face: string, cx: number, cy: number, cz: number) => {
+  // Helper to validate if a face is actually pointing outwards in world space
+  const checkFaceOrientation = (localFace: string, object: THREE.Object3D, cx: number, cy: number, cz: number) => {
     const limit = (size - 1) / 2;
-    const epsilon = 0.15; // For floating point safety
-
-    if (face === 'R' && Math.abs(cx - limit) < epsilon) return true;
-    if (face === 'L' && Math.abs(cx + limit) < epsilon) return true;
-    if (face === 'U' && Math.abs(cy - limit) < epsilon) return true;
-    if (face === 'D' && Math.abs(cy + limit) < epsilon) return true;
-    if (face === 'F' && Math.abs(cz - limit) < epsilon) return true;
-    if (face === 'B' && Math.abs(cz + limit) < epsilon) return true;
+    const epsilon = 0.25; 
     
+    const localNormal = new THREE.Vector3();
+    if (localFace === 'R') localNormal.set(1, 0, 0);
+    else if (localFace === 'L') localNormal.set(-1, 0, 0);
+    else if (localFace === 'U') localNormal.set(0, 1, 0);
+    else if (localFace === 'D') localNormal.set(0, -1, 0);
+    else if (localFace === 'F') localNormal.set(0, 0, 1);
+    else if (localFace === 'B') localNormal.set(0, 0, -1);
+
+    const worldNormal = localNormal.applyQuaternion(object.quaternion);
+
+    if (worldNormal.x > 0.9 && cx > limit - epsilon) return true;
+    if (worldNormal.x < -0.9 && cx < -limit + epsilon) return true;
+    if (worldNormal.y > 0.9 && cy > limit - epsilon) return true;
+    if (worldNormal.y < -0.9 && cy < -limit + epsilon) return true;
+    if (worldNormal.z > 0.9 && cz > limit - epsilon) return true;
+    if (worldNormal.z < -0.9 && cz < -limit + epsilon) return true;
+
     return false;
   };
 
@@ -167,7 +180,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     else if (absY > absX && absY > absZ) face = localPoint.y > 0 ? 'U' : 'D';
     else face = localPoint.z > 0 ? 'F' : 'B';
 
-    if (!isOuterFace(face, cubieData.x, cubieData.y, cubieData.z)) {
+    if (!checkFaceOrientation(face, object, cubieData.x, cubieData.y, cubieData.z)) {
         if (hoveredId === id) {
             setHoveredId(null);
             setHoveredFace(null);
@@ -189,8 +202,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     document.body.style.cursor = 'default';
   };
 
-  // Changed from onPointerDown to onClick for better mobile reliability
-  const handleClick = (e: ThreeEvent<MouseEvent>, cubieId: number) => {
+  const handleClick = (e: ThreeEvent<PointerEvent>, cubieId: number) => {
     if (isAnimating || moveQueue.length > 0) return;
     
     e.stopPropagation(); 
@@ -220,7 +232,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
         face = localPoint.z > 0 ? 'F' : 'B';
     }
 
-    if (!isOuterFace(face, cubieData.x, cubieData.y, cubieData.z)) {
+    if (!checkFaceOrientation(face, object, cubieData.x, cubieData.y, cubieData.z)) {
         setSelection(null);
         return;
     }
@@ -236,6 +248,23 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     });
 
     if (onInteractionChange) onInteractionChange(true);
+  };
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    clickStartRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePointerUp = (e: ThreeEvent<PointerEvent>, cubieId: number) => {
+    if (!clickStartRef.current) return;
+    
+    const deltaX = Math.abs(e.clientX - clickStartRef.current.x);
+    const deltaY = Math.abs(e.clientY - clickStartRef.current.y);
+    clickStartRef.current = null;
+
+    // Tolerance for mobile tap (20px) to allow slight finger slips
+    if (deltaX < 20 && deltaY < 20) {
+        handleClick(e, cubieId);
+    }
   };
 
   const handleArrowClick = (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
@@ -473,7 +502,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
             ref={(el) => { if (el) cubieObjectsRef.current[cubie.id] = el; }}
             position={[cubie.x, cubie.y, cubie.z]}
             quaternion={cubie.q}
-            onClick={(e) => handleClick(e, cubie.id)}
+            onPointerDown={handlePointerDown}
+            onPointerUp={(e) => handlePointerUp(e, cubie.id)}
             onPointerMove={(e) => handlePointerMove(e, cubie.id)}
             onPointerOut={handlePointerOut}
           >
