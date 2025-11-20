@@ -9,7 +9,8 @@ import {
   Shuffle, 
   RotateCcw, 
   Smartphone, 
-  Check
+  Check,
+  Gauge
 } from 'lucide-react';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
   const [isShaking, setIsShaking] = useState(false);
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [shakeHint, setShakeHint] = useState(false);
+  const [solveSpeed, setSolveSpeed] = useState(15);
 
   useEffect(() => {
     let lastX = 0, lastY = 0, lastZ = 0;
@@ -120,6 +122,8 @@ function App() {
     }
   };
 
+  const isBusy = isShaking || moveQueue.length > 0;
+
   return (
     <div className="w-full h-screen bg-[#050505] relative overflow-hidden font-sans">
       
@@ -129,13 +133,11 @@ function App() {
              enablePan={false} 
              minDistance={15} 
              maxDistance={50}
-             // Camera spins automatically, faster when shuffling/solving
              autoRotate={true}
              autoRotateSpeed={isShaking ? 20.0 : 0.8}
              dampingFactor={0.05}
           />
           
-          {/* High Quality Studio Lighting */}
           <Environment preset="studio" />
           <ambientLight intensity={0.4} />
           <spotLight 
@@ -156,13 +158,13 @@ function App() {
             moveQueue={moveQueue} 
             onMoveComplete={onMoveComplete}
             isShaking={isShaking}
+            speed={solveSpeed}
           />
           
           <ContactShadows position={[0, -6, 0]} opacity={0.5} scale={30} blur={2} far={6} />
         </Canvas>
       </div>
 
-      {/* HUD / UI */}
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6 sm:p-10">
         
         <div className="flex justify-between items-start pointer-events-auto">
@@ -196,7 +198,7 @@ function App() {
             
             <button 
               onClick={handleShuffle} 
-              disabled={isShaking || moveQueue.length > 0}
+              disabled={isBusy}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <Shuffle size={18} />
@@ -205,7 +207,7 @@ function App() {
 
             <button 
               onClick={handleSolve} 
-              disabled={isShaking || moveQueue.length > 0 || history.length === 0}
+              disabled={isBusy || history.length === 0}
               className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <RotateCcw size={18} />
@@ -215,12 +217,26 @@ function App() {
             <div className="w-px bg-white/10 mx-1 my-2"></div>
 
             <button 
-              onClick={() => setShowThemeSelector(!showThemeSelector)}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showThemeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'}`}
+              onClick={() => !isBusy && setShowThemeSelector(!showThemeSelector)}
+              disabled={isBusy}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showThemeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <Palette size={18} />
               <span className="hidden sm:inline">THEME</span>
             </button>
+          </div>
+
+          <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full px-5 py-2 border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             <Gauge size={16} className="text-indigo-400" />
+             <input
+               type="range"
+               min="1"
+               max="50"
+               value={solveSpeed}
+               onChange={(e) => setSolveSpeed(Number(e.target.value))}
+               className="w-32 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+             />
+             <span className="text-xs font-mono text-white/60 w-8 text-right">{solveSpeed}x</span>
           </div>
 
           {showThemeSelector && (
@@ -233,7 +249,6 @@ function App() {
                 >
                   <div className="flex flex-col items-center gap-2">
                      <div className="flex gap-0.5">
-                        {/* Small visual representation of the palette */}
                         {[PRESET_THEMES[themeName].F, PRESET_THEMES[themeName].R, PRESET_THEMES[themeName].U].map((c, i) => (
                           <div key={i} className="w-3 h-3 rounded-full" style={{ backgroundColor: c }} />
                         ))}

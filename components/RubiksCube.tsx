@@ -10,25 +10,26 @@ interface RubiksCubeProps {
   moveQueue: Move[];
   onMoveComplete: () => void;
   isShaking: boolean;
+  speed: number;
 }
 
 // Visual constants
-const BOX_SIZE = 0.90; // Slightly smaller for cleaner gaps
-const BEVEL_RADIUS = 0.06; // Tighter radius for a tech look
-const STICKER_OFFSET = 0.455; // Position of the sticker relative to center
-const STICKER_SIZE = 0.80; // Size of the colored tile
+const BOX_SIZE = 0.90; 
+const BEVEL_RADIUS = 0.06; 
+const STICKER_OFFSET = 0.455; 
+const STICKER_SIZE = 0.80; 
 
-// Reusable Geometry to save memory
+// Reusable Geometry
 const stickerGeometry = new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE);
 
-const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplete, isShaking }) => {
+const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplete, isShaking, speed }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotatingGroup = useRef<THREE.Group>(null);
   
   // --- Material Setup ---
   const materials = useMemo(() => {
     const matSettings = {
-      roughness: 0.05, // Shinier
+      roughness: 0.05, 
       metalness: 0.1,
       clearcoat: 1.0,
       clearcoatRoughness: 0.1,
@@ -57,12 +58,13 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
           const ly = y - offset;
           const lz = z - offset;
           
-          // Only render surface cubes for performance
           if (isSurface(lx, ly, lz, CUBE_SIZE)) {
             positions.push({ 
               id: id++, 
               x: lx, y: ly, z: lz,
-              initialX: lx, initialY: ly, initialZ: lz 
+              initialX: lx, initialY: ly, initialZ: lz,
+              // Persist rotation state explicitly
+              q: new THREE.Quaternion() 
             });
           }
         }
@@ -81,10 +83,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
 
   // --- Helper: Robust Snapping ---
   const snapTransform = (obj: THREE.Object3D) => {
-    // 1. Snap Position to strictly match grid
-    // The grid is always centered, so positions are like -4.5, -3.5, ... 3.5, 4.5
+    // 1. Snap Position to strictly match grid (x.5 format)
     const snap = (val: number) => {
-        // Round to nearest .5
         return Math.round(val - 0.5) + 0.5;
     };
     
@@ -107,26 +107,24 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
   // --- Animation Loop ---
   useFrame((state, delta) => {
     if (isAnimating && currentMove.current && rotatingGroup.current) {
-      // Process queue fast but visible if shaking (approx 0.1s per move)
-      // Lower value = Slower animation. 15 is fast but smooth.
-      const speed = isShaking ? 15 : 6; 
-      animationProgress.current += delta * speed;
+      // Animation speed: Use prop if shaking/solving, otherwise default manual speed
+      const animSpeed = isShaking ? speed : 6; 
+      animationProgress.current += delta * animSpeed;
       
       const targetRotation = (Math.PI / 2) * currentMove.current.direction;
       let currentRot = 0;
 
       if (animationProgress.current >= Math.PI / 2) {
-        // Ensure we hit the exact target before finishing
         currentRot = targetRotation;
-        rotatingGroup.current.setRotationFromAxisAngle(
-            new THREE.Vector3(
-                currentMove.current.axis === 'x' ? 1 : 0,
-                currentMove.current.axis === 'y' ? 1 : 0,
-                currentMove.current.axis === 'z' ? 1 : 0
-            ), 
-            currentRot
+        
+        const axisVector = new THREE.Vector3(
+            currentMove.current.axis === 'x' ? 1 : 0,
+            currentMove.current.axis === 'y' ? 1 : 0,
+            currentMove.current.axis === 'z' ? 1 : 0
         );
-        rotatingGroup.current.updateMatrixWorld(); // Force update before detach
+
+        rotatingGroup.current.setRotationFromAxisAngle(axisVector, currentRot);
+        rotatingGroup.current.updateMatrixWorld(); 
         finishMove();
       } else {
         currentRot = animationProgress.current * currentMove.current.direction;
@@ -153,9 +151,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
     const offset = (CUBE_SIZE - 1) / 2;
     const coordinateValue = move.layer - offset; 
     
-    // Increased epsilon to prevent "missed" blocks during fast floating point math
-    const EPSILON = 0.6;
-
+    // Reset Rotating Group
     if(rotatingGroup.current) {
       rotatingGroup.current.rotation.set(0,0,0);
       rotatingGroup.current.position.set(0,0,0);
@@ -163,20 +159,32 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
       rotatingGroup.current.updateMatrixWorld();
     }
 
+    let attachedCount = 0;
+
     cubiesRef.current.forEach(cubie => {
       let inSlice = false;
-      // Use the LOGICAL coordinates to select pieces, not physical ones (avoids drift)
-      if (move.axis === 'x' && Math.abs(cubie.x - coordinateValue) < EPSILON) inSlice = true;
-      if (move.axis === 'y' && Math.abs(cubie.y - coordinateValue) < EPSILON) inSlice = true;
-      if (move.axis === 'z' && Math.abs(cubie.z - coordinateValue) < EPSILON) inSlice = true;
+      // Robust selection: Check if coordinate matches expected layer index (allowing for tiny float drift)
+      // The grid is 1 unit apart, so a tolerance of 0.25 is extremely safe.
+      if (move.axis === 'x' && Math.abs(cubie.x - coordinateValue) < 0.25) inSlice = true;
+      if (move.axis === 'y' && Math.abs(cubie.y - coordinateValue) < 0.25) inSlice = true;
+      if (move.axis === 'z' && Math.abs(cubie.z - coordinateValue) < 0.25) inSlice = true;
 
       if (inSlice) {
         const obj = cubieObjectsRef.current[cubie.id];
         if (obj && rotatingGroup.current) {
           rotatingGroup.current.attach(obj);
+          attachedCount++;
         }
       }
     });
+
+    // Safety: If no blocks found (shouldn't happen), finish immediately to unblock queue
+    if (attachedCount === 0) {
+        console.warn("Ghost move detected, skipping animation");
+        setIsAnimating(false);
+        currentMove.current = null;
+        onMoveComplete();
+    }
   };
 
   const finishMove = () => {
@@ -184,24 +192,23 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
 
     const children = [...rotatingGroup.current.children];
     
-    // 1. Detach and Snap immediately
     children.forEach(child => {
       groupRef.current?.attach(child);
       snapTransform(child);
     });
 
-    // 2. Update Logical Coordinates from the Snapped Physical Positions
+    // Update Logical State from Physical State
     cubiesRef.current.forEach(cubie => {
       const obj = cubieObjectsRef.current[cubie.id];
       if (obj) {
-        // Trust the snapped position directly
         cubie.x = obj.position.x;
         cubie.y = obj.position.y;
         cubie.z = obj.position.z;
+        // IMPORTANT: Save rotation so it persists if React re-renders the component
+        cubie.q.copy(obj.quaternion);
       }
     });
 
-    // 3. Cleanup
     rotatingGroup.current.rotation.set(0,0,0);
     rotatingGroup.current.updateMatrix();
     
@@ -217,8 +224,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
       <group ref={rotatingGroup} />
       
       {cubiesRef.current.map((cubie) => {
-        // Determine faces based on INITIAL position for stickers
-        // This ensures the "colors" stick to the pieces correctly regardless of current rotation
+        // Determine stickers based on INITIAL position
         const isActive = {
           R: cubie.initialX === offset,
           L: cubie.initialX === -offset,
@@ -233,8 +239,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
             key={cubie.id}
             ref={(el) => { if (el) cubieObjectsRef.current[cubie.id] = el; }}
             position={[cubie.x, cubie.y, cubie.z]}
+            quaternion={cubie.q} // Apply persisted rotation
           >
-            {/* The Body */}
             <RoundedBox 
               args={[BOX_SIZE, BOX_SIZE, BOX_SIZE]} 
               radius={BEVEL_RADIUS} 
@@ -242,7 +248,6 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
               material={materials.Plastic}
             />
             
-            {/* Stickers - Physically separate geometry to eliminate Z-fighting flicker */}
             {isActive.R && <mesh position={[STICKER_OFFSET, 0, 0]} rotation={[0, Math.PI/2, 0]} geometry={stickerGeometry} material={materials.R} />}
             {isActive.L && <mesh position={[-STICKER_OFFSET, 0, 0]} rotation={[0, -Math.PI/2, 0]} geometry={stickerGeometry} material={materials.L} />}
             
