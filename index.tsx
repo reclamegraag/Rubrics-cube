@@ -18,8 +18,8 @@ root.render(
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     try {
-      // Bump to v6 to force clean slate
-      navigator.serviceWorker.register('sw.js?v=6').then(
+      // Bump to v7 to force clean slate
+      navigator.serviceWorker.register('sw.js?v=7').then(
         (registration) => {
           console.log('SW registered with scope: ', registration.scope);
           registration.update();

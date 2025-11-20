@@ -19,28 +19,6 @@ import {
   Lightbulb
 } from 'lucide-react';
 
-// Fix for missing JSX type definitions for React Three Fiber elements
-// Augmenting both global JSX and React module JSX to ensure compatibility
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      ambientLight: any;
-      spotLight: any;
-      pointLight: any;
-    }
-  }
-}
-
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      ambientLight: any;
-      spotLight: any;
-      pointLight: any;
-    }
-  }
-}
-
 function App() {
   const [theme, setTheme] = useState<CubeTheme>(DEFAULT_THEME);
   const [activeThemeName, setActiveThemeName] = useState<string>('Classic');
@@ -324,7 +302,8 @@ function App() {
         )}
 
         {/* Main Controls */}
-        <div className="flex flex-col gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-2">
+        {/* flex-col-reverse places the panels ABOVE the button bar, preventing them from being hidden by safe areas */}
+        <div className="flex flex-col-reverse gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-8 pb-[env(safe-area-inset-bottom)]">
           
           <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all">
             
