@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hypercube-v15';
+const CACHE_NAME = 'hypercube-v18';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',

@@ -129,15 +129,6 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     };
   }, [size]);
 
-  // Deselect if clicking purely on background
-  useEffect(() => {
-    const handleMissedClick = () => {
-        setSelection(null);
-    };
-    // We attach a listener to the canvas via the parent logic or just use logic below
-    // Since we can't easily attach to 'background' here without a mesh, we rely on clicking X or clicking another cube.
-  }, []);
-
   // Helper to validate if a face is actually on the outside of the main cube
   const isOuterFace = (face: string, cx: number, cy: number, cz: number) => {
     const limit = (size - 1) / 2;
@@ -156,6 +147,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
   // --- Interaction Handlers ---
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>, id: number) => {
+    // Disable hover effects on touch devices to prevent sticky hovers
+    if (e.pointerType === 'touch') return;
     if (isAnimating || moveQueue.length > 0) return;
     
     e.stopPropagation();
@@ -196,7 +189,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     document.body.style.cursor = 'default';
   };
 
-  const handlePointerDown = (e: ThreeEvent<PointerEvent>, cubieId: number) => {
+  // Changed from onPointerDown to onClick for better mobile reliability
+  const handleClick = (e: ThreeEvent<MouseEvent>, cubieId: number) => {
     if (isAnimating || moveQueue.length > 0) return;
     
     e.stopPropagation(); 
@@ -440,6 +434,12 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     <group 
         ref={groupRef} 
         scale={displayScale} 
+        onPointerMissed={(e) => {
+            // Allow deselecting when clicking empty space
+            if (e.type === 'click' && selection) {
+                setSelection(null);
+            }
+        }}
         onPointerLeave={() => { 
             setHoveredId(null); 
             setHoveredFace(null); 
@@ -473,7 +473,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
             ref={(el) => { if (el) cubieObjectsRef.current[cubie.id] = el; }}
             position={[cubie.x, cubie.y, cubie.z]}
             quaternion={cubie.q}
-            onPointerDown={(e) => handlePointerDown(e, cubie.id)}
+            onClick={(e) => handleClick(e, cubie.id)}
             onPointerMove={(e) => handlePointerMove(e, cubie.id)}
             onPointerOut={handlePointerOut}
           >
