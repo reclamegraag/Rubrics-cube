@@ -1,11 +1,13 @@
-const CACHE_NAME = 'hypercube-v1';
+const CACHE_NAME = 'hypercube-v2';
 const urlsToCache = [
   './',
   './index.html',
   './index.tsx',
+  './manifest.json'
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting(); // Force new SW to activate immediately
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
@@ -18,6 +20,7 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
+        // Cache hit - return response
         if (response) {
           return response;
         }
@@ -37,6 +40,6 @@ self.addEventListener('activate', event => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim()) // Take control of all pages immediately
   );
 });
