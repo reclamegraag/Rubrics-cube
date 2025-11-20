@@ -1,8 +1,8 @@
 const CACHE_NAME = 'hypercube-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/index.tsx',
+  './',
+  './index.html',
+  './index.tsx',
 ];
 
 self.addEventListener('install', event => {
