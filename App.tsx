@@ -11,12 +11,8 @@ import {
   Smartphone, 
   Check,
   Gauge,
-  Move3d,
-  Layers,
-  RotateCw,
-  Play,
   Grid3x3,
-  Lightbulb
+  Lightbulb,
 } from 'lucide-react';
 
 function App() {
@@ -27,18 +23,17 @@ function App() {
   const [history, setHistory] = useState<Move[]>([]);
   const [isShaking, setIsShaking] = useState(false);
   
+  // Camera & Interaction State
+  const [isInteracting, setIsInteracting] = useState(false);
+  const [isOrbitEnabled, setIsOrbitEnabled] = useState(true);
+  
   // UI Panel States
   const [showThemeSelector, setShowThemeSelector] = useState(false);
   const [showSizeSelector, setShowSizeSelector] = useState(false);
-  const [showManualControls, setShowManualControls] = useState(false);
   
   const [shakeHint, setShakeHint] = useState(false);
   const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [solveSpeed, setSolveSpeed] = useState(15);
-  
-  // Manual Control State
-  const [manualAxis, setManualAxis] = useState<'x'|'y'|'z'>('y');
-  const [manualLayer, setManualLayer] = useState<number>(1); 
 
   useEffect(() => {
     let lastX = 0, lastY = 0, lastZ = 0;
@@ -77,19 +72,11 @@ function App() {
     }
   }, [isShaking, moveQueue]);
 
-  // Reset manual layer when cube size shrinks below current layer selection
-  useEffect(() => {
-    if (manualLayer > cubeSize) {
-      setManualLayer(cubeSize);
-    }
-  }, [cubeSize, manualLayer]);
-
   const handleShuffle = useCallback(() => {
     if (moveQueue.length > 0) return;
     setIsShaking(true);
     
     const newMoves: Move[] = [];
-    // Shuffle moves scale roughly with size to ensure a good mix
     const shuffleCount = Math.max(25, cubeSize * 2);
     
     for (let i = 0; i < shuffleCount; i++) {
@@ -126,35 +113,19 @@ function App() {
     }
 
     const lastMove = history[history.length - 1];
-    // Inverse the move to get the solution step
     const nextAxis = lastMove.axis;
-    const nextLayer = lastMove.layer + 1; // Convert 0-based to 1-based for UI
+    const nextLayer = lastMove.layer + 1; 
     const nextDirection = (lastMove.direction * -1) as 1 | -1; 
-    
-    // Auto-set the manual controls to the correct row/axis
-    setManualAxis(nextAxis);
-    setManualLayer(nextLayer);
-    
-    // Open controls panel so user can see and act
-    setShowManualControls(true);
-    setShowThemeSelector(false);
-    setShowSizeSelector(false);
 
-    const dirText = nextDirection === 1 ? "Counter-Clockwise (CCW)" : "Clockwise (CW)";
+    const dirText = nextDirection === 1 ? "Counter-Clockwise" : "Clockwise";
     setHintMessage(`HINT: Rotate ${nextAxis.toUpperCase()}-Axis, Layer ${nextLayer} → ${dirText}`);
     
     setTimeout(() => setHintMessage(null), 4000);
   };
 
-  const handleManualMove = (direction: 1 | -1) => {
+  // Callback for direct touch interaction from RubiksCube component
+  const handleDirectMove = (move: Move) => {
     if (isShaking || moveQueue.length > 0) return;
-    
-    const move: Move = {
-      axis: manualAxis,
-      layer: manualLayer - 1, // Convert 1-based UI to 0-based logic
-      direction: direction
-    };
-
     setMoveQueue([move]);
     setHistory(prev => [...prev, move]);
   };
@@ -174,7 +145,6 @@ function App() {
     setCubeSize(newSize);
     setHistory([]);
     setMoveQueue([]);
-    setManualLayer(1);
   };
 
   const applyTheme = (name: string) => {
@@ -200,20 +170,14 @@ function App() {
     }
   };
 
-  const togglePanel = (panel: 'manual' | 'theme' | 'size') => {
+  const togglePanel = (panel: 'theme' | 'size') => {
     if (isBusy) return;
     
-    if (panel === 'manual') {
-      setShowManualControls(!showManualControls);
-      setShowThemeSelector(false);
-      setShowSizeSelector(false);
-    } else if (panel === 'theme') {
+    if (panel === 'theme') {
       setShowThemeSelector(!showThemeSelector);
-      setShowManualControls(false);
       setShowSizeSelector(false);
     } else if (panel === 'size') {
       setShowSizeSelector(!showSizeSelector);
-      setShowManualControls(false);
       setShowThemeSelector(false);
     }
   };
@@ -226,12 +190,15 @@ function App() {
       <div className="absolute inset-0 z-0">
         <Canvas camera={{ position: [16, 12, 20], fov: 35 }} shadows>
           <OrbitControls 
+             enabled={isOrbitEnabled}
              enablePan={false} 
              minDistance={15} 
              maxDistance={50}
-             autoRotate={true}
-             autoRotateSpeed={isShaking ? 20.0 : 0.8}
+             // Auto rotate stops if interacting, otherwise spins unless shaking handles it
+             autoRotate={!isInteracting}
+             autoRotateSpeed={isShaking ? 20.0 : 1.0}
              dampingFactor={0.05}
+             makeDefault
           />
           
           <Environment preset="studio" />
@@ -250,11 +217,14 @@ function App() {
           <Sparkles count={40} scale={14} size={3} speed={0.4} opacity={0.2} color={theme.U} />
           
           <RubiksCube 
-            key={cubeSize} // Force re-mount when size changes to reset geometry state
+            key={cubeSize} 
             size={cubeSize}
             theme={theme} 
             moveQueue={moveQueue} 
             onMoveComplete={onMoveComplete}
+            onManualMove={handleDirectMove}
+            onInteractionChange={setIsInteracting}
+            setOrbitEnabled={setIsOrbitEnabled}
             isShaking={isShaking}
             speed={solveSpeed}
           />
@@ -302,7 +272,6 @@ function App() {
         )}
 
         {/* Main Controls */}
-        {/* flex-col-reverse places the panels ABOVE the button bar, preventing them from being hidden by safe areas */}
         <div className="flex flex-col-reverse gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-8 pb-[env(safe-area-inset-bottom)]">
           
           <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all">
@@ -337,15 +306,6 @@ function App() {
             </button>
 
             <button 
-              onClick={() => togglePanel('manual')}
-              disabled={isBusy}
-              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showManualControls ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title="Manual Controls"
-            >
-              <Play size={18} />
-            </button>
-
-            <button 
               onClick={() => togglePanel('size')}
               disabled={isBusy}
               className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showSizeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -365,7 +325,7 @@ function App() {
           </div>
 
           {/* Speed Slider (visible when no other panel is open) */}
-          {!showManualControls && !showSizeSelector && !showThemeSelector && (
+          {!showSizeSelector && !showThemeSelector && (
             <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full px-5 py-2 border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <Gauge size={16} className="text-indigo-400" />
               <input
@@ -405,61 +365,6 @@ function App() {
                   <span>Max (10)</span>
                 </div>
              </div>
-          )}
-
-          {/* Manual Control Panel */}
-          {showManualControls && (
-            <div className="bg-black/80 backdrop-blur-xl border border-indigo-500/30 p-4 rounded-2xl flex flex-col gap-4 shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300">
-              
-              {/* Axis Selector */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-indigo-300 font-mono text-xs uppercase tracking-wider">
-                  <Move3d size={14} /> Axis
-                </div>
-                <div className="flex bg-white/10 rounded-lg p-1 gap-1">
-                  {(['x', 'y', 'z'] as const).map((axis) => (
-                    <button
-                      key={axis}
-                      onClick={() => setManualAxis(axis)}
-                      className={`w-10 h-8 rounded-md flex items-center justify-center font-bold text-sm transition uppercase ${manualAxis === axis ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
-                    >
-                      {axis}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Layer Selector */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-indigo-300 font-mono text-xs uppercase tracking-wider">
-                  <Layers size={14} /> Layer <span className="text-white font-bold">{manualLayer}</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max={cubeSize}
-                  value={manualLayer}
-                  onChange={(e) => setManualLayer(Number(e.target.value))}
-                  className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-              </div>
-
-              {/* Rotate Actions */}
-              <div className="grid grid-cols-2 gap-3 mt-1">
-                <button 
-                  onClick={() => handleManualMove(1)}
-                  className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl active:scale-95 transition"
-                >
-                  <RotateCcw size={16} />
-                </button>
-                <button 
-                  onClick={() => handleManualMove(-1)}
-                  className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl active:scale-95 transition"
-                >
-                  <RotateCw size={16} />
-                </button>
-              </div>
-            </div>
           )}
 
           {/* Theme Selector Panel */}
