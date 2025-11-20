@@ -1,6 +1,6 @@
 import { CubeTheme } from './types';
 
-export const CUBE_SIZE = 10;
+export const DEFAULT_CUBE_SIZE = 10;
 export const ANIMATION_SPEED = 300; // ms per 90 degree turn
 
 export const DEFAULT_THEME: CubeTheme = {
@@ -41,9 +41,11 @@ export const PRESET_THEMES: Record<string, CubeTheme> = {
 // Helper to check if a cubie is on the surface (optimization)
 export const isSurface = (x: number, y: number, z: number, size: number) => {
   const limit = (size - 1) / 2;
+  // Use a small epsilon for float comparison safety, though logic usually holds for .5 steps
+  const epsilon = 0.01;
   return (
-    Math.abs(x) === limit ||
-    Math.abs(y) === limit ||
-    Math.abs(z) === limit
+    Math.abs(Math.abs(x) - limit) < epsilon ||
+    Math.abs(Math.abs(y) - limit) < epsilon ||
+    Math.abs(Math.abs(z) - limit) < epsilon
   );
 };

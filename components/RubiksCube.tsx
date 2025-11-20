@@ -3,9 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { CubeTheme, Move } from '../types';
-import { CUBE_SIZE, isSurface } from '../constants';
+import { isSurface } from '../constants';
 
 interface RubiksCubeProps {
+  size: number;
   theme: CubeTheme;
   moveQueue: Move[];
   onMoveComplete: () => void;
@@ -22,7 +23,7 @@ const STICKER_SIZE = 0.80;
 // Reusable Geometry
 const stickerGeometry = new THREE.PlaneGeometry(STICKER_SIZE, STICKER_SIZE);
 
-const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplete, isShaking, speed }) => {
+const RubiksCube: React.FC<RubiksCubeProps> = ({ size, theme, moveQueue, onMoveComplete, isShaking, speed }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotatingGroup = useRef<THREE.Group>(null);
   
@@ -48,17 +49,17 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
   // --- Initialization ---
   const initialPositions = useMemo(() => {
     const positions = [];
-    const offset = (CUBE_SIZE - 1) / 2;
+    const offset = (size - 1) / 2;
     let id = 0;
 
-    for (let x = 0; x < CUBE_SIZE; x++) {
-      for (let y = 0; y < CUBE_SIZE; y++) {
-        for (let z = 0; z < CUBE_SIZE; z++) {
+    for (let x = 0; x < size; x++) {
+      for (let y = 0; y < size; y++) {
+        for (let z = 0; z < size; z++) {
           const lx = x - offset;
           const ly = y - offset;
           const lz = z - offset;
           
-          if (isSurface(lx, ly, lz, CUBE_SIZE)) {
+          if (isSurface(lx, ly, lz, size)) {
             positions.push({ 
               id: id++, 
               x: lx, y: ly, z: lz,
@@ -71,10 +72,16 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
       }
     }
     return positions;
-  }, []);
+  }, [size]); // Re-calculate when size changes
 
   const cubiesRef = useRef(initialPositions);
   const cubieObjectsRef = useRef<{ [id: number]: THREE.Object3D }>({});
+
+  // Reset refs if size changed significantly (safety check, though 'key' in parent usually handles this)
+  if (cubiesRef.current.length !== initialPositions.length) {
+      cubiesRef.current = initialPositions;
+      cubieObjectsRef.current = {};
+  }
 
   // Animation State
   const [isAnimating, setIsAnimating] = useState(false);
@@ -83,9 +90,22 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
 
   // --- Helper: Robust Snapping ---
   const snapTransform = (obj: THREE.Object3D) => {
-    // 1. Snap Position to strictly match grid (x.5 format)
+    // 1. Snap Position
+    // Odd sizes (3, 5, etc) use integer coordinates (-1, 0, 1)
+    // Even sizes (2, 4, etc) use half-integer coordinates (-1.5, -0.5, 0.5, 1.5)
     const snap = (val: number) => {
-        return Math.round(val - 0.5) + 0.5;
+        // Adding a tiny epsilon to handle -0.5 vs 0.5 boundaries correctly when floating point drift occurs
+        const epsilon = 0.001;
+        if (size % 2 === 0) {
+            // Even: Snap to nearest x.5
+            // Shift by 0.5, round, shift back. 
+            // e.g. 0.5 -> 1.0 -> 1 -> 0.5
+            // e.g. 0.49 -> 0.99 -> 1 -> 0.5
+            return Math.round(val - 0.5 + epsilon) + 0.5;
+        } else {
+            // Odd: Snap to nearest integer
+            return Math.round(val + epsilon);
+        }
     };
     
     obj.position.x = snap(obj.position.x);
@@ -148,7 +168,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
     setIsAnimating(true);
     animationProgress.current = 0;
 
-    const offset = (CUBE_SIZE - 1) / 2;
+    const offset = (size - 1) / 2;
     const coordinateValue = move.layer - offset; 
     
     // Reset Rotating Group
@@ -217,14 +237,18 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({ theme, moveQueue, onMoveComplet
     onMoveComplete();
   };
 
-  const offset = (CUBE_SIZE - 1) / 2;
+  const offset = (size - 1) / 2;
+  
+  // Dynamically scale the cube so large cubes fit in view
+  // Base scale 1.0 for size 10.
+  const displayScale = 10 / Math.max(size, 5);
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} scale={displayScale}>
       <group ref={rotatingGroup} />
       
       {cubiesRef.current.map((cubie) => {
-        // Determine stickers based on INITIAL position
+        // Determine stickers based on INITIAL position relative to the dynamic size
         const isActive = {
           R: cubie.initialX === offset,
           L: cubie.initialX === -offset,

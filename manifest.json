@@ -1,0 +1,21 @@
+{
+  "short_name": "HyperCube",
+  "name": "Gemini HyperCube 10x10",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/619/619032.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/619/619032.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#050505",
+  "background_color": "#050505",
+  "orientation": "portrait"
+}

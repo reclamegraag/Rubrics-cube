@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Environment, Stars, Sparkles, ContactShadows } from '@react-three/drei';
 import { Move, CubeTheme } from './types';
-import { DEFAULT_THEME, CUBE_SIZE, PRESET_THEMES } from './constants';
+import { DEFAULT_THEME, DEFAULT_CUBE_SIZE, PRESET_THEMES } from './constants';
 import RubiksCube from './components/RubiksCube';
 import { 
   Palette, 
@@ -10,18 +10,35 @@ import {
   RotateCcw, 
   Smartphone, 
   Check,
-  Gauge
+  Gauge,
+  Move3d,
+  Layers,
+  RotateCw,
+  Play,
+  Grid3x3,
+  Lightbulb
 } from 'lucide-react';
 
 function App() {
   const [theme, setTheme] = useState<CubeTheme>(DEFAULT_THEME);
   const [activeThemeName, setActiveThemeName] = useState<string>('Classic');
+  const [cubeSize, setCubeSize] = useState<number>(DEFAULT_CUBE_SIZE);
   const [moveQueue, setMoveQueue] = useState<Move[]>([]);
   const [history, setHistory] = useState<Move[]>([]);
   const [isShaking, setIsShaking] = useState(false);
+  
+  // UI Panel States
   const [showThemeSelector, setShowThemeSelector] = useState(false);
+  const [showSizeSelector, setShowSizeSelector] = useState(false);
+  const [showManualControls, setShowManualControls] = useState(false);
+  
   const [shakeHint, setShakeHint] = useState(false);
+  const [hintMessage, setHintMessage] = useState<string | null>(null);
   const [solveSpeed, setSolveSpeed] = useState(15);
+  
+  // Manual Control State
+  const [manualAxis, setManualAxis] = useState<'x'|'y'|'z'>('y');
+  const [manualLayer, setManualLayer] = useState<number>(1); 
 
   useEffect(() => {
     let lastX = 0, lastY = 0, lastZ = 0;
@@ -60,21 +77,31 @@ function App() {
     }
   }, [isShaking, moveQueue]);
 
+  // Reset manual layer when cube size shrinks below current layer selection
+  useEffect(() => {
+    if (manualLayer > cubeSize) {
+      setManualLayer(cubeSize);
+    }
+  }, [cubeSize, manualLayer]);
+
   const handleShuffle = useCallback(() => {
     if (moveQueue.length > 0) return;
     setIsShaking(true);
     
     const newMoves: Move[] = [];
-    for (let i = 0; i < 25; i++) {
+    // Shuffle moves scale roughly with size to ensure a good mix
+    const shuffleCount = Math.max(25, cubeSize * 2);
+    
+    for (let i = 0; i < shuffleCount; i++) {
       const axis = ['x', 'y', 'z'][Math.floor(Math.random() * 3)] as 'x'|'y'|'z';
-      const layer = Math.floor(Math.random() * CUBE_SIZE);
+      const layer = Math.floor(Math.random() * cubeSize);
       const direction = Math.random() > 0.5 ? 1 : -1;
       newMoves.push({ axis, layer, direction });
     }
     
     setMoveQueue(prev => [...prev, ...newMoves]);
     setHistory(prev => [...prev, ...newMoves]);
-  }, [moveQueue]);
+  }, [moveQueue, cubeSize]);
 
   const handleSolve = () => {
     if (moveQueue.length > 0 || history.length === 0) return;
@@ -89,6 +116,49 @@ function App() {
     setHistory([]); 
   };
 
+  const handleHint = () => {
+    if (isBusy) return;
+    
+    if (history.length === 0) {
+      setHintMessage("Cube is perfectly solved!");
+      setTimeout(() => setHintMessage(null), 2000);
+      return;
+    }
+
+    const lastMove = history[history.length - 1];
+    // Inverse the move to get the solution step
+    const nextAxis = lastMove.axis;
+    const nextLayer = lastMove.layer + 1; // Convert 0-based to 1-based for UI
+    const nextDirection = (lastMove.direction * -1) as 1 | -1; 
+    
+    // Auto-set the manual controls to the correct row/axis
+    setManualAxis(nextAxis);
+    setManualLayer(nextLayer);
+    
+    // Open controls panel so user can see and act
+    setShowManualControls(true);
+    setShowThemeSelector(false);
+    setShowSizeSelector(false);
+
+    const dirText = nextDirection === 1 ? "Counter-Clockwise (CCW)" : "Clockwise (CW)";
+    setHintMessage(`HINT: Rotate ${nextAxis.toUpperCase()}-Axis, Layer ${nextLayer} → ${dirText}`);
+    
+    setTimeout(() => setHintMessage(null), 4000);
+  };
+
+  const handleManualMove = (direction: 1 | -1) => {
+    if (isShaking || moveQueue.length > 0) return;
+    
+    const move: Move = {
+      axis: manualAxis,
+      layer: manualLayer - 1, // Convert 1-based UI to 0-based logic
+      direction: direction
+    };
+
+    setMoveQueue([move]);
+    setHistory(prev => [...prev, move]);
+  };
+
   const onMoveComplete = () => {
     setMoveQueue(prev => {
       const next = prev.slice(1);
@@ -97,6 +167,14 @@ function App() {
       }
       return next;
     });
+  };
+
+  const handleSizeChange = (newSize: number) => {
+    if (isBusy) return;
+    setCubeSize(newSize);
+    setHistory([]);
+    setMoveQueue([]);
+    setManualLayer(1);
   };
 
   const applyTheme = (name: string) => {
@@ -119,6 +197,24 @@ function App() {
     } else {
        setShakeHint(true);
        setTimeout(() => setShakeHint(false), 3000);
+    }
+  };
+
+  const togglePanel = (panel: 'manual' | 'theme' | 'size') => {
+    if (isBusy) return;
+    
+    if (panel === 'manual') {
+      setShowManualControls(!showManualControls);
+      setShowThemeSelector(false);
+      setShowSizeSelector(false);
+    } else if (panel === 'theme') {
+      setShowThemeSelector(!showThemeSelector);
+      setShowManualControls(false);
+      setShowSizeSelector(false);
+    } else if (panel === 'size') {
+      setShowSizeSelector(!showSizeSelector);
+      setShowManualControls(false);
+      setShowThemeSelector(false);
     }
   };
 
@@ -154,6 +250,8 @@ function App() {
           <Sparkles count={40} scale={14} size={3} speed={0.4} opacity={0.2} color={theme.U} />
           
           <RubiksCube 
+            key={cubeSize} // Force re-mount when size changes to reset geometry state
+            size={cubeSize}
             theme={theme} 
             moveQueue={moveQueue} 
             onMoveComplete={onMoveComplete}
@@ -165,15 +263,17 @@ function App() {
         </Canvas>
       </div>
 
-      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6 sm:p-10">
+      {/* UI Layer */}
+      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-8">
         
+        {/* Header */}
         <div className="flex justify-between items-start pointer-events-auto">
           <div>
-            <h1 className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-gray-200 to-gray-600 drop-shadow-2xl">
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white via-gray-200 to-gray-600 drop-shadow-2xl">
               HYPER<span className="text-indigo-500">CUBE</span>
             </h1>
-            <p className="text-indigo-400/80 text-xs tracking-[0.2em] font-bold mt-1 uppercase">
-              10x10 Edition
+            <p className="text-indigo-400/80 text-[10px] sm:text-xs tracking-[0.2em] font-bold mt-1 uppercase">
+              {cubeSize}x{cubeSize} Edition
             </p>
           </div>
           
@@ -192,53 +292,176 @@ function App() {
            </div>
         )}
 
-        <div className="flex flex-col gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-4">
+        {hintMessage && (
+           <div className="absolute top-32 left-1/2 -translate-x-1/2 w-full max-w-md px-4 flex justify-center">
+             <div className="bg-amber-500/90 backdrop-blur-md text-white px-6 py-3 rounded-full font-bold shadow-2xl animate-bounce flex items-center gap-3 border border-white/20 text-sm sm:text-base">
+               <Lightbulb size={20} className="fill-white text-white" />
+               {hintMessage}
+             </div>
+           </div>
+        )}
+
+        {/* Main Controls */}
+        <div className="flex flex-col gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-2">
           
-          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all hover:scale-105">
+          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all">
             
             <button 
               onClick={handleShuffle} 
               disabled={isBusy}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <Shuffle size={18} />
-              <span>SHAKE</span>
+              <span className="hidden sm:inline">SHAKE</span>
             </button>
 
             <button 
               onClick={handleSolve} 
               disabled={isBusy || history.length === 0}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <RotateCcw size={18} />
-              <span>SOLVE</span>
+              <span className="hidden sm:inline">SOLVE</span>
             </button>
 
             <div className="w-px bg-white/10 mx-1 my-2"></div>
 
             <button 
-              onClick={() => !isBusy && setShowThemeSelector(!showThemeSelector)}
+              onClick={handleHint}
               disabled={isBusy}
-              className={`flex items-center gap-2 px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showThemeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 bg-white/5 text-white hover:bg-white/10 ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Get Hint"
+            >
+              <Lightbulb size={18} />
+            </button>
+
+            <button 
+              onClick={() => togglePanel('manual')}
+              disabled={isBusy}
+              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showManualControls ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Manual Controls"
+            >
+              <Play size={18} />
+            </button>
+
+            <button 
+              onClick={() => togglePanel('size')}
+              disabled={isBusy}
+              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showSizeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Grid Size"
+            >
+              <Grid3x3 size={18} />
+            </button>
+
+            <button 
+              onClick={() => togglePanel('theme')}
+              disabled={isBusy}
+              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showThemeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
+              title="Themes"
             >
               <Palette size={18} />
-              <span className="hidden sm:inline">THEME</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full px-5 py-2 border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <Gauge size={16} className="text-indigo-400" />
-             <input
-               type="range"
-               min="1"
-               max="50"
-               value={solveSpeed}
-               onChange={(e) => setSolveSpeed(Number(e.target.value))}
-               className="w-32 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-             />
-             <span className="text-xs font-mono text-white/60 w-8 text-right">{solveSpeed}x</span>
-          </div>
+          {/* Speed Slider (visible when no other panel is open) */}
+          {!showManualControls && !showSizeSelector && !showThemeSelector && (
+            <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md rounded-full px-5 py-2 border border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Gauge size={16} className="text-indigo-400" />
+              <input
+                type="range"
+                min="1"
+                max="50"
+                value={solveSpeed}
+                onChange={(e) => setSolveSpeed(Number(e.target.value))}
+                className="w-32 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              />
+              <span className="text-xs font-mono text-white/60 w-8 text-right">{solveSpeed}x</span>
+            </div>
+          )}
 
+          {/* Size Selector Panel */}
+          {showSizeSelector && (
+             <div className="bg-black/80 backdrop-blur-xl border border-indigo-500/30 p-6 rounded-2xl flex flex-col gap-4 shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300">
+                <div className="flex justify-between items-center">
+                   <div className="flex items-center gap-2 text-indigo-300 font-mono text-xs uppercase tracking-wider">
+                     <Grid3x3 size={16} /> Cube Dimension
+                   </div>
+                   <span className="text-2xl font-black text-white">{cubeSize} x {cubeSize}</span>
+                </div>
+                
+                <input
+                  type="range"
+                  min="3"
+                  max="10"
+                  step="1"
+                  value={cubeSize}
+                  onChange={(e) => handleSizeChange(Number(e.target.value))}
+                  className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+                
+                <div className="flex justify-between text-[10px] text-white/40 uppercase font-bold tracking-widest">
+                  <span>Standard (3)</span>
+                  <span>Max (10)</span>
+                </div>
+             </div>
+          )}
+
+          {/* Manual Control Panel */}
+          {showManualControls && (
+            <div className="bg-black/80 backdrop-blur-xl border border-indigo-500/30 p-4 rounded-2xl flex flex-col gap-4 shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-4 fade-in duration-300">
+              
+              {/* Axis Selector */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-indigo-300 font-mono text-xs uppercase tracking-wider">
+                  <Move3d size={14} /> Axis
+                </div>
+                <div className="flex bg-white/10 rounded-lg p-1 gap-1">
+                  {(['x', 'y', 'z'] as const).map((axis) => (
+                    <button
+                      key={axis}
+                      onClick={() => setManualAxis(axis)}
+                      className={`w-10 h-8 rounded-md flex items-center justify-center font-bold text-sm transition uppercase ${manualAxis === axis ? 'bg-indigo-500 text-white shadow-lg' : 'text-white/50 hover:text-white hover:bg-white/10'}`}
+                    >
+                      {axis}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Layer Selector */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-indigo-300 font-mono text-xs uppercase tracking-wider">
+                  <Layers size={14} /> Layer <span className="text-white font-bold">{manualLayer}</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max={cubeSize}
+                  value={manualLayer}
+                  onChange={(e) => setManualLayer(Number(e.target.value))}
+                  className="flex-1 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+              </div>
+
+              {/* Rotate Actions */}
+              <div className="grid grid-cols-2 gap-3 mt-1">
+                <button 
+                  onClick={() => handleManualMove(1)}
+                  className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl active:scale-95 transition"
+                >
+                  <RotateCcw size={16} />
+                </button>
+                <button 
+                  onClick={() => handleManualMove(-1)}
+                  className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-xl active:scale-95 transition"
+                >
+                  <RotateCw size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Theme Selector Panel */}
           {showThemeSelector && (
             <div className="bg-black/80 backdrop-blur-xl border border-indigo-500/30 p-4 rounded-2xl flex flex-wrap justify-center gap-3 shadow-2xl w-full max-w-2xl animate-in slide-in-from-bottom-4 fade-in duration-300">
               {Object.keys(PRESET_THEMES).map((themeName) => (
@@ -270,8 +493,8 @@ function App() {
         
         <div className="hidden sm:block absolute bottom-8 right-8 pointer-events-none text-right">
           <div className="text-white/20 font-mono text-[10px] tracking-widest uppercase leading-relaxed">
-             Matrix: 10x10x10<br/>
-             Total Cubies: 1000<br/>
+             Matrix: {cubeSize}x{cubeSize}x{cubeSize}<br/>
+             Total Cubies: {Math.pow(cubeSize, 3)}<br/>
              Moves in Stack: {history.length}
           </div>
         </div>

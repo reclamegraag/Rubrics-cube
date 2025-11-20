@@ -13,3 +13,21 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Safe Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    try {
+      navigator.serviceWorker.register('/sw.js').then(
+        (registration) => {
+          console.log('SW registered: ', registration.scope);
+        },
+        (err) => {
+          console.warn('SW registration failed: ', err);
+        }
+      );
+    } catch (e) {
+      console.warn('Service Worker not supported in this context');
+    }
+  });
+}
