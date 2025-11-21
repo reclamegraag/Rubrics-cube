@@ -9,11 +9,50 @@ import {
   Shuffle, 
   RotateCcw, 
   Smartphone, 
-  Check,
+  Check, 
   Gauge,
   Grid3x3,
   Lightbulb,
 } from 'lucide-react';
+
+// Reusable Styled Control Button with Tooltip
+const ControlButton = ({ 
+  onClick, 
+  disabled, 
+  icon: Icon, 
+  label, 
+  hotkey, 
+  active,
+  colorClass = "bg-white/5 hover:bg-white/10 text-white"
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  icon: React.ElementType;
+  label: string;
+  hotkey?: string;
+  active?: boolean;
+  colorClass?: string;
+}) => (
+  <button 
+    onClick={onClick} 
+    disabled={disabled}
+    className={`group relative flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${active ? 'bg-white text-black shadow-white/20 shadow-lg' : colorClass} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+  >
+    <Icon size={18} />
+    {/* Tooltip */}
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+      <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10">
+        {label}
+        {hotkey && (
+          <kbd className="bg-white/20 px-1.5 rounded text-[10px] font-mono font-bold min-w-[1.2em] text-center">
+            {hotkey}
+          </kbd>
+        )}
+      </div>
+      <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 mt-[-1px]"></div>
+    </div>
+  </button>
+);
 
 function App() {
   const [theme, setTheme] = useState<CubeTheme>(DEFAULT_THEME);
@@ -33,7 +72,10 @@ function App() {
   
   const [shakeHint, setShakeHint] = useState(false);
   const [hintMessage, setHintMessage] = useState<string | null>(null);
+  const [activeHint, setActiveHint] = useState<Move | null>(null);
   const [solveSpeed, setSolveSpeed] = useState(15);
+
+  const isBusy = isShaking || moveQueue.length > 0;
 
   useEffect(() => {
     let lastX = 0, lastY = 0, lastZ = 0;
@@ -75,6 +117,7 @@ function App() {
   const handleShuffle = useCallback(() => {
     if (moveQueue.length > 0) return;
     setIsShaking(true);
+    setActiveHint(null); // Clear hints on shuffle
     
     const newMoves: Move[] = [];
     const shuffleCount = Math.max(25, cubeSize * 2);
@@ -90,9 +133,10 @@ function App() {
     setHistory(prev => [...prev, ...newMoves]);
   }, [moveQueue, cubeSize]);
 
-  const handleSolve = () => {
+  const handleSolve = useCallback(() => {
     if (moveQueue.length > 0 || history.length === 0) return;
     setIsShaking(true);
+    setActiveHint(null);
     
     const solveMoves = [...history].reverse().map(m => ({
       ...m,
@@ -101,9 +145,9 @@ function App() {
     
     setMoveQueue(solveMoves);
     setHistory([]); 
-  };
+  }, [history, moveQueue]);
 
-  const handleHint = () => {
+  const handleHint = useCallback(() => {
     if (isBusy) return;
     
     if (history.length === 0) {
@@ -112,20 +156,43 @@ function App() {
       return;
     }
 
+    // Calculate the move needed to reverse the last step
     const lastMove = history[history.length - 1];
-    const nextAxis = lastMove.axis;
-    const nextLayer = lastMove.layer + 1; 
-    const nextDirection = (lastMove.direction * -1) as 1 | -1; 
+    const hintMove: Move = {
+      axis: lastMove.axis,
+      layer: lastMove.layer,
+      direction: (lastMove.direction * -1) as 1 | -1
+    };
 
-    const dirText = nextDirection === 1 ? "Counter-Clockwise" : "Clockwise";
-    setHintMessage(`HINT: Rotate ${nextAxis.toUpperCase()}-Axis, Layer ${nextLayer} → ${dirText}`);
-    
-    setTimeout(() => setHintMessage(null), 4000);
-  };
+    setActiveHint(hintMove);
+    setHintMessage("Follow the arrows to reverse the last move.");
+    // Auto-clear message but keep visual hint until move is made
+    setTimeout(() => setHintMessage(null), 3000);
+  }, [history, isBusy]);
 
   // Callback for direct touch interaction from RubiksCube component
   const handleDirectMove = (move: Move) => {
     if (isShaking || moveQueue.length > 0) return;
+    
+    // If a hint is active, check if this move matches the hint
+    if (activeHint) {
+        // Simple validation: check if we moved the right layer/axis
+        // If successful, clear the hint
+        if (move.axis === activeHint.axis && move.layer === activeHint.layer) {
+           setActiveHint(null);
+           
+           // If direction matches, pop from history (undo)
+           if (move.direction === activeHint.direction) {
+             setHistory(prev => prev.slice(0, -1));
+             setMoveQueue([move]);
+             return;
+           }
+        } else {
+            // Moved wrong part? Just keep going, user overrides hint
+            setActiveHint(null);
+        }
+    }
+
     setMoveQueue([move]);
     setHistory(prev => [...prev, move]);
   };
@@ -145,6 +212,7 @@ function App() {
     setCubeSize(newSize);
     setHistory([]);
     setMoveQueue([]);
+    setActiveHint(null);
   };
 
   const applyTheme = (name: string) => {
@@ -182,7 +250,40 @@ function App() {
     }
   };
 
-  const isBusy = isShaking || moveQueue.length > 0;
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isBusy) return;
+
+      switch(e.key.toLowerCase()) {
+        case 's':
+          handleShuffle();
+          break;
+        case 'r':
+        case 'enter':
+          handleSolve();
+          break;
+        case 'h':
+          handleHint();
+          break;
+        case 'g':
+          togglePanel('size');
+          break;
+        case 't':
+          togglePanel('theme');
+          break;
+        case 'escape':
+          setShowSizeSelector(false);
+          setShowThemeSelector(false);
+          setActiveHint(null);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isBusy, handleShuffle, handleSolve, handleHint]);
+
 
   return (
     <div className="w-full h-screen bg-[#050505] relative overflow-hidden font-sans">
@@ -195,7 +296,7 @@ function App() {
              minDistance={15} 
              maxDistance={50}
              // Auto rotate stops if interacting, otherwise spins unless shaking handles it
-             autoRotate={!isInteracting}
+             autoRotate={!isInteracting && !activeHint}
              autoRotateSpeed={isShaking ? 20.0 : 1.0}
              dampingFactor={0.05}
              makeDefault
@@ -227,6 +328,7 @@ function App() {
             setOrbitEnabled={setIsOrbitEnabled}
             isShaking={isShaking}
             speed={solveSpeed}
+            activeHint={activeHint}
           />
           
           <ContactShadows position={[0, -6, 0]} opacity={0.5} scale={30} blur={2} far={6} />
@@ -249,10 +351,12 @@ function App() {
           
           <button 
             onClick={requestMotionPermission}
-            className="bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-full text-white hover:bg-white/10 hover:scale-110 transition duration-300"
-            title="Enable Motion Shake"
+            className="bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-full text-white hover:bg-white/10 hover:scale-110 transition duration-300 group relative"
           >
             <Smartphone size={20} />
+             <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 hidden group-hover:block bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap border border-white/10">
+               Enable Motion
+             </div>
           </button>
         </div>
 
@@ -279,49 +383,61 @@ function App() {
             <button 
               onClick={handleShuffle} 
               disabled={isBusy}
-              className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="group relative flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-400 hover:to-indigo-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <Shuffle size={18} />
               <span className="hidden sm:inline">SHAKE</span>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col items-center">
+                <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10">
+                  Shuffle <kbd className="bg-white/20 px-1.5 rounded text-[10px] font-mono font-bold">S</kbd>
+                </div>
+                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 mt-[-1px]"></div>
+              </div>
             </button>
 
             <button 
               onClick={handleSolve} 
               disabled={isBusy || history.length === 0}
-              className="flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="group relative flex items-center gap-2 px-4 sm:px-6 py-3 rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-bold shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <RotateCcw size={18} />
               <span className="hidden sm:inline">SOLVE</span>
+               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col items-center">
+                <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10">
+                  Solve <kbd className="bg-white/20 px-1.5 rounded text-[10px] font-mono font-bold">R</kbd>
+                </div>
+                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 mt-[-1px]"></div>
+              </div>
             </button>
 
             <div className="w-px bg-white/10 mx-1 my-2"></div>
 
-            <button 
+            <ControlButton 
               onClick={handleHint}
               disabled={isBusy}
-              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 bg-white/5 text-white hover:bg-white/10 ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title="Get Hint"
-            >
-              <Lightbulb size={18} />
-            </button>
+              icon={Lightbulb}
+              label="Get Hint"
+              hotkey="H"
+              active={!!activeHint}
+            />
 
-            <button 
+            <ControlButton 
               onClick={() => togglePanel('size')}
               disabled={isBusy}
-              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showSizeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title="Grid Size"
-            >
-              <Grid3x3 size={18} />
-            </button>
+              icon={Grid3x3}
+              label="Grid Size"
+              hotkey="G"
+              active={showSizeSelector}
+            />
 
-            <button 
+            <ControlButton 
               onClick={() => togglePanel('theme')}
               disabled={isBusy}
-              className={`flex items-center gap-2 px-3 sm:px-5 py-3 rounded-xl font-semibold transition active:scale-95 ${showThemeSelector ? 'bg-white text-black shadow-white/20 shadow-lg' : 'bg-white/5 text-white hover:bg-white/10'} ${isBusy ? 'opacity-50 cursor-not-allowed' : ''}`}
-              title="Themes"
-            >
-              <Palette size={18} />
-            </button>
+              icon={Palette}
+              label="Theme"
+              hotkey="T"
+              active={showThemeSelector}
+            />
           </div>
 
           {/* Speed Slider (visible when no other panel is open) */}

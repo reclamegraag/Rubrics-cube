@@ -16,6 +16,7 @@ interface RubiksCubeProps {
   setOrbitEnabled?: (enabled: boolean) => void;
   isShaking: boolean;
   speed: number;
+  activeHint: Move | null;
 }
 
 // Visual constants
@@ -37,7 +38,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
   onInteractionChange,
   setOrbitEnabled,
   isShaking, 
-  speed 
+  speed,
+  activeHint
 }) => {
   const groupRef = useRef<THREE.Group>(null);
   const rotatingGroup = useRef<THREE.Group>(null);
@@ -125,6 +127,69 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     cubiePos: { x: number, y: number, z: number };
   } | null>(null);
 
+  // --- Hint Logic: Auto-select when activeHint changes ---
+  useEffect(() => {
+    if (activeHint && cubiesRef.current.length > 0) {
+      const offset = (size - 1) / 2;
+      const targetLayerCoord = activeHint.layer - offset;
+      
+      // Find a visible cubie on the relevant axis/layer
+      // We prefer the Front face for clarity if possible
+      const candidate = cubiesRef.current.find(c => {
+        // Check if it's on the target layer
+        let onLayer = false;
+        if (activeHint.axis === 'x' && Math.abs(c.x - targetLayerCoord) < 0.1) onLayer = true;
+        if (activeHint.axis === 'y' && Math.abs(c.y - targetLayerCoord) < 0.1) onLayer = true;
+        if (activeHint.axis === 'z' && Math.abs(c.z - targetLayerCoord) < 0.1) onLayer = true;
+        
+        if (!onLayer) return false;
+
+        // Optimization: Pick a cubie that is likely visible (on F, U, or R face)
+        const isFront = Math.abs(c.z - offset) < 0.1;
+        const isUp = Math.abs(c.y - offset) < 0.1;
+        const isRight = Math.abs(c.x - offset) < 0.1;
+        
+        return isFront || isUp || isRight;
+      });
+
+      if (candidate && cubieObjectsRef.current[candidate.id]) {
+        const obj = cubieObjectsRef.current[candidate.id];
+        
+        // Determine which face to highlight based on the axis to ensure meaningful arrows
+        // If Axis is Y (horizontal spin), select F face (shows L/R arrows)
+        // If Axis is X (vertical spin), select F face (shows U/D arrows)
+        // If Axis is Z (roll), select U face (shows L/R arrows) or R face (shows U/D)
+        
+        let targetFace = 'F'; 
+        let normalVector = new THREE.Vector3(0, 0, 1);
+
+        if (activeHint.axis === 'y') {
+             // For Y rotation, F face allows Left/Right arrows
+             // Fallback if this cubie isn't on F? 
+             // For simplicity, we just pick the face that corresponds to the cubie's outer surface
+             if (Math.abs(candidate.z - offset) < 0.1) { targetFace = 'F'; normalVector.set(0,0,1); }
+             else if (Math.abs(candidate.x - offset) < 0.1) { targetFace = 'R'; normalVector.set(1,0,0); }
+        } else {
+             if (Math.abs(candidate.z - offset) < 0.1) { targetFace = 'F'; normalVector.set(0,0,1); }
+             else if (Math.abs(candidate.y - offset) < 0.1) { targetFace = 'U'; normalVector.set(0,1,0); }
+        }
+
+        // Apply object rotation to normal
+        const worldNormal = normalVector.applyQuaternion(obj.quaternion).round();
+
+        setSelection({
+          id: candidate.id,
+          face: targetFace,
+          normal: worldNormal,
+          cubiePos: { ...candidate }
+        });
+      }
+    } else {
+      // Clear selection if hint is cleared
+      if (!activeHint) setSelection(null);
+    }
+  }, [activeHint, size]);
+
   // Reset cursor when unmounting or changing size
   useEffect(() => {
     return () => {
@@ -160,9 +225,8 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
   // --- Interaction Handlers ---
 
   const handlePointerMove = (e: ThreeEvent<PointerEvent>, id: number) => {
-    // Disable hover effects on touch devices to prevent sticky hovers
     if (e.pointerType === 'touch') return;
-    if (isAnimating || moveQueue.length > 0) return;
+    if (isAnimating || moveQueue.length > 0 || activeHint) return; // Disable hover during hint
     
     e.stopPropagation();
     
@@ -203,7 +267,7 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
   };
 
   const handleClick = (e: ThreeEvent<PointerEvent>, cubieId: number) => {
-    if (isAnimating || moveQueue.length > 0) return;
+    if (isAnimating || moveQueue.length > 0 || activeHint) return; // Lock manual selection during hint
     
     e.stopPropagation(); 
     
@@ -274,8 +338,6 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     const viewDir = new THREE.Vector3();
     camera.getWorldDirection(viewDir);
     
-    // Assume standard Up unless rolled heavily, but we use cross product for robustness
-    // If camera is looking straight down/up, we need safe fallbacks
     let camUp = camera.up.clone();
     let camRight = new THREE.Vector3().crossVectors(viewDir, camUp).normalize();
     let realCamUp = new THREE.Vector3().crossVectors(camRight, viewDir).normalize();
@@ -288,7 +350,6 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     if (dir === 'LEFT') moveVec.copy(camRight).negate();
 
     // Logic: Rotation Axis = FaceNormal x MoveDirection
-    // Example: Face Normal (0,0,1) [Front], Move Up (0,1,0) -> Axis (-1, 0, 0) [Left/Right Axis]
     const rotationAxisVec = new THREE.Vector3().crossVectors(selection.normal, moveVec);
     
     // Snap to nearest cardinal axis
@@ -298,11 +359,6 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
     if (Math.abs(rotationAxisVec.y) > maxComp) { maxComp = Math.abs(rotationAxisVec.y); axis = 'y'; }
     if (Math.abs(rotationAxisVec.z) > maxComp) { maxComp = Math.abs(rotationAxisVec.z); axis = 'z'; }
 
-    // Determine direction sign based on the snapped axis
-    // We need to re-verify direction because cross product gives torque vector.
-    // The rotation sign around that axis depends on coordinate system.
-    // Visual check: Face F(Z+), Move U(Y+) -> Cross(-X). Rotation around X in negative direction moves Y+ to Z+. Correct.
-    // So we use the sign of the computed cross product component directly.
     const sign = Math.sign(rotationAxisVec[axis]) || 1;
 
     const offset = (size - 1) / 2;
@@ -459,13 +515,35 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
   const offset = (size - 1) / 2;
   const displayScale = 10 / Math.max(size, 5);
 
+  // Determine visualization parameters for Hint mode
+  // If activeHint exists, we need to decide which arrows are "Relevant"
+  // Y-axis rotation usually implies Left/Right arrows
+  // X/Z-axis rotation usually implies Up/Down arrows
+  const isHintActive = !!activeHint && !!selection;
+  const showUpDown = !isHintActive || (activeHint?.axis !== 'y'); // Approximate visual logic
+  const showLeftRight = !isHintActive || (activeHint?.axis === 'y'); 
+  
+  // Determine which arrow is the "Correct" one for the hint
+  // This is tricky because arrow visuals depend on camera/face normal logic in handleArrowClick
+  // For now, we simply pulse the axis arrows to show "Opposite arrows" as requested
+  // and rely on the user to try one.
+  // Or, we can try to guess direction. If hint direction is 1, it might be LEFT or RIGHT depending on axis.
+  
+  const arrowClass = (base: string) => 
+    `${base} p-2 rounded-full shadow-lg transition flex items-center justify-center ${
+      isHintActive 
+      ? 'bg-emerald-500 text-white scale-110 animate-pulse ring-2 ring-white' 
+      : 'bg-white/90 text-black hover:bg-white hover:scale-110 active:bg-indigo-500 active:text-white'
+    }`;
+
+  const ignoredArrowClass = "hidden";
+
   return (
     <group 
         ref={groupRef} 
         scale={displayScale} 
         onPointerMissed={(e) => {
-            // Allow deselecting when clicking empty space
-            if (e.type === 'click' && selection) {
+            if (e.type === 'click' && selection && !activeHint) {
                 setSelection(null);
             }
         }}
@@ -490,10 +568,6 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
         const isHovered = hoveredId === cubie.id;
         const isSelected = selection?.id === cubie.id;
         
-        // Determine which face to highlight: hover takes precedence visually for pointer location, 
-        // but selection persists. 
-        // If selected, we show the selection highlight. 
-        // If just hovered, we show hover highlight.
         const activeFace = isSelected ? selection?.face : (isHovered ? hoveredFace : null);
         
         return (
@@ -527,12 +601,25 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
             {/* Face Highlight - Hover or Selection */}
             {(isHovered || isSelected) && !isAnimating && moveQueue.length === 0 && activeFace && (
               <>
-                {activeFace === 'R' && <mesh raycast={() => null} position={[HIGHLIGHT_OFFSET, 0, 0]} rotation={[0, Math.PI/2, 0]} geometry={stickerGeometry} material={materials.Highlight} />}
-                {activeFace === 'L' && <mesh raycast={() => null} position={[-HIGHLIGHT_OFFSET, 0, 0]} rotation={[0, -Math.PI/2, 0]} geometry={stickerGeometry} material={materials.Highlight} />}
-                {activeFace === 'U' && <mesh raycast={() => null} position={[0, HIGHLIGHT_OFFSET, 0]} rotation={[-Math.PI/2, 0, 0]} geometry={stickerGeometry} material={materials.Highlight} />}
-                {activeFace === 'D' && <mesh raycast={() => null} position={[0, -HIGHLIGHT_OFFSET, 0]} rotation={[Math.PI/2, 0, 0]} geometry={stickerGeometry} material={materials.Highlight} />}
-                {activeFace === 'F' && <mesh raycast={() => null} position={[0, 0, HIGHLIGHT_OFFSET]} rotation={[0, 0, 0]} geometry={stickerGeometry} material={materials.Highlight} />}
-                {activeFace === 'B' && <mesh raycast={() => null} position={[0, 0, -HIGHLIGHT_OFFSET]} rotation={[0, Math.PI, 0]} geometry={stickerGeometry} material={materials.Highlight} />}
+                {['R','L','U','D','F','B'].map(face => {
+                    if (face !== activeFace) return null;
+                    const pos: [number, number, number] = 
+                        face === 'R' ? [HIGHLIGHT_OFFSET, 0, 0] :
+                        face === 'L' ? [-HIGHLIGHT_OFFSET, 0, 0] :
+                        face === 'U' ? [0, HIGHLIGHT_OFFSET, 0] :
+                        face === 'D' ? [0, -HIGHLIGHT_OFFSET, 0] :
+                        face === 'F' ? [0, 0, HIGHLIGHT_OFFSET] : [0, 0, -HIGHLIGHT_OFFSET];
+                    const rot: [number, number, number] =
+                        face === 'R' ? [0, Math.PI/2, 0] :
+                        face === 'L' ? [0, -Math.PI/2, 0] :
+                        face === 'U' ? [-Math.PI/2, 0, 0] :
+                        face === 'D' ? [Math.PI/2, 0, 0] :
+                        face === 'F' ? [0, 0, 0] : [0, Math.PI, 0];
+                    
+                    return (
+                        <mesh key={face} raycast={() => null} position={pos} rotation={rot} geometry={stickerGeometry} material={materials.Highlight} />
+                    );
+                })}
               </>
             )}
 
@@ -544,38 +631,48 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
                     activeFace === 'F' ? HIGHLIGHT_OFFSET : activeFace === 'B' ? -HIGHLIGHT_OFFSET : 0
                 ]} center zIndexRange={[100, 0]} distanceFactor={12}>
                     <div className="relative w-32 h-32 flex flex-col items-center justify-center pointer-events-auto select-none">
+                        
+                        {/* Up Arrow */}
                         <button 
                             onPointerDown={(e) => { e.stopPropagation(); handleArrowClick('UP'); }}
-                            className="absolute -top-8 bg-white/90 text-black p-2 rounded-full hover:bg-white hover:scale-110 transition shadow-lg active:bg-indigo-500 active:text-white"
+                            className={`absolute -top-8 ${showUpDown ? arrowClass('w-10 h-10') : ignoredArrowClass}`}
                         >
                             <ChevronUp size={24} strokeWidth={3} />
                         </button>
+
+                        {/* Down Arrow */}
                         <button 
                              onPointerDown={(e) => { e.stopPropagation(); handleArrowClick('DOWN'); }}
-                            className="absolute -bottom-8 bg-white/90 text-black p-2 rounded-full hover:bg-white hover:scale-110 transition shadow-lg active:bg-indigo-500 active:text-white"
+                             className={`absolute -bottom-8 ${showUpDown ? arrowClass('w-10 h-10') : ignoredArrowClass}`}
                         >
                             <ChevronDown size={24} strokeWidth={3} />
                         </button>
+
+                        {/* Left Arrow */}
                         <button 
                              onPointerDown={(e) => { e.stopPropagation(); handleArrowClick('LEFT'); }}
-                            className="absolute -left-8 bg-white/90 text-black p-2 rounded-full hover:bg-white hover:scale-110 transition shadow-lg active:bg-indigo-500 active:text-white"
+                             className={`absolute -left-8 ${showLeftRight ? arrowClass('w-10 h-10') : ignoredArrowClass}`}
                         >
                             <ChevronLeft size={24} strokeWidth={3} />
                         </button>
+
+                        {/* Right Arrow */}
                         <button 
                              onPointerDown={(e) => { e.stopPropagation(); handleArrowClick('RIGHT'); }}
-                            className="absolute -right-8 bg-white/90 text-black p-2 rounded-full hover:bg-white hover:scale-110 transition shadow-lg active:bg-indigo-500 active:text-white"
+                             className={`absolute -right-8 ${showLeftRight ? arrowClass('w-10 h-10') : ignoredArrowClass}`}
                         >
                             <ChevronRight size={24} strokeWidth={3} />
                         </button>
                         
-                        {/* Close Button */}
-                        <button 
-                            onPointerDown={(e) => { e.stopPropagation(); setSelection(null); if (onInteractionChange) onInteractionChange(false); }}
-                            className="absolute bg-red-500/90 text-white p-1.5 rounded-full hover:bg-red-500 transition shadow-lg"
-                        >
-                            <X size={16} strokeWidth={3} />
-                        </button>
+                        {/* Close Button (Hide if hint is active to force them to move) */}
+                        {!isHintActive && (
+                          <button 
+                              onPointerDown={(e) => { e.stopPropagation(); setSelection(null); if (onInteractionChange) onInteractionChange(false); }}
+                              className="absolute bg-red-500/90 text-white p-1.5 rounded-full hover:bg-red-500 transition shadow-lg"
+                          >
+                              <X size={16} strokeWidth={3} />
+                          </button>
+                        )}
                     </div>
                 </Html>
             )}
