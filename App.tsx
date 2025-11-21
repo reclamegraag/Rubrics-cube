@@ -305,16 +305,17 @@ function App() {
           {/* Changed to 'city' with blur to remove the sharp "white cloud" reflection */}
           <Environment preset="city" blur={0.8} />
           
-          <ambientLight intensity={0.4} />
+          <ambientLight intensity={1.5} />
+          <hemisphereLight args={['#ffffff', '#333333', 1.0]} />
           <spotLight 
             position={[20, 20, 20]} 
-            angle={0.15} 
+            angle={0.2} 
             penumbra={1} 
-            intensity={1.5} 
+            intensity={3.0} 
             castShadow 
             shadow-bias={-0.0001}
           />
-          <pointLight position={[-10, -10, -10]} intensity={0.5} color={theme.U} />
+          <pointLight position={[-10, -10, -10]} intensity={2.0} color={theme.U} />
           
           <Stars radius={100} depth={50} count={3000} factor={4} saturation={0} fade speed={0.5} />
           <Sparkles count={40} scale={14} size={3} speed={0.4} opacity={0.2} color={theme.U} />
@@ -380,7 +381,7 @@ function App() {
         {/* Main Controls */}
         <div className="flex flex-col-reverse gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-8 pb-[env(safe-area-inset-bottom)]">
           
-          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all relative z-50">
+          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all relative z-[100]">
             
             <button 
               onClick={handleShuffle} 

@@ -50,12 +50,12 @@ const RubiksCube: React.FC<RubiksCubeProps> = ({
 
   // --- Material Setup ---
   const materials = useMemo(() => {
-    // Reduced roughness and clearcoat to avoid "white cloud" glare
+    // Reduced roughness and added clearcoat for a nice glossy plastic look
     const matSettings = {
       roughness: 0.2, 
       metalness: 0.0,
       clearcoat: 0.3,
-      clearcoatRoughness: 0.2,
+      clearcoatRoughness: 0.1,
     };
     return {
       U: new THREE.MeshPhysicalMaterial({ color: theme.U, ...matSettings }),
