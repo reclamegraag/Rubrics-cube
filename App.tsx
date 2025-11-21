@@ -40,16 +40,16 @@ const ControlButton = ({
   >
     <Icon size={18} />
     {/* Tooltip */}
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-      <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10">
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+      <div className="bg-gray-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg shadow-2xl whitespace-nowrap flex items-center gap-2 border border-white/10 transform translate-y-1 group-hover:translate-y-0 transition-transform">
         {label}
         {hotkey && (
-          <kbd className="bg-white/20 px-1.5 rounded text-[10px] font-mono font-bold min-w-[1.2em] text-center">
+          <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold min-w-[1.2em] text-center shadow-sm">
             {hotkey}
           </kbd>
         )}
       </div>
-      <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 mt-[-1px]"></div>
+      <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900/90 mt-[-1px]"></div>
     </div>
   </button>
 );
@@ -302,7 +302,9 @@ function App() {
              makeDefault
           />
           
-          <Environment preset="studio" />
+          {/* Changed to 'city' with blur to remove the sharp "white cloud" reflection */}
+          <Environment preset="city" blur={0.8} />
+          
           <ambientLight intensity={0.4} />
           <spotLight 
             position={[20, 20, 20]} 
@@ -354,7 +356,7 @@ function App() {
             className="bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-full text-white hover:bg-white/10 hover:scale-110 transition duration-300 group relative"
           >
             <Smartphone size={20} />
-             <div className="absolute right-full top-1/2 -translate-y-1/2 mr-3 hidden group-hover:block bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap border border-white/10">
+             <div className="absolute right-0 top-full mt-3 hidden group-hover:block bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap border border-white/10 z-50">
                Enable Motion
              </div>
           </button>
@@ -387,11 +389,12 @@ function App() {
             >
               <Shuffle size={18} />
               <span className="hidden sm:inline">SHAKE</span>
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col items-center">
-                <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10">
-                  Shuffle <kbd className="bg-white/20 px-1.5 rounded text-[10px] font-mono font-bold">S</kbd>
+              {/* Custom inline tooltip for main button */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+                <div className="bg-gray-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10 transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                  Shuffle <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold shadow-sm">S</kbd>
                 </div>
-                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 mt-[-1px]"></div>
+                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900/90 mt-[-1px]"></div>
               </div>
             </button>
 
@@ -402,11 +405,11 @@ function App() {
             >
               <RotateCcw size={18} />
               <span className="hidden sm:inline">SOLVE</span>
-               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 hidden group-hover:flex flex-col items-center">
-                <div className="bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10">
-                  Solve <kbd className="bg-white/20 px-1.5 rounded text-[10px] font-mono font-bold">R</kbd>
+               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover:flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+                <div className="bg-gray-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2 border border-white/10 transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                  Solve <kbd className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold shadow-sm">R</kbd>
                 </div>
-                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 mt-[-1px]"></div>
+                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900/90 mt-[-1px]"></div>
               </div>
             </button>
 
@@ -416,7 +419,7 @@ function App() {
               onClick={handleHint}
               disabled={isBusy}
               icon={Lightbulb}
-              label="Get Hint"
+              label="Hint"
               hotkey="H"
               active={!!activeHint}
             />
