@@ -380,7 +380,7 @@ function App() {
         {/* Main Controls */}
         <div className="flex flex-col-reverse gap-4 pointer-events-auto items-center justify-center w-full max-w-3xl mx-auto mb-8 pb-[env(safe-area-inset-bottom)]">
           
-          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all">
+          <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 flex gap-2 sm:gap-3 shadow-2xl shadow-black/50 ring-1 ring-white/5 transform transition-all relative z-50">
             
             <button 
               onClick={handleShuffle} 
